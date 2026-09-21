@@ -305,6 +305,7 @@ button.sidebar-folder-row:hover,
   padding: 18px; box-shadow: 0 12px 40px rgba(0, 0, 0, .4);
   outline: none;
 }
+.sidebar-modal--wide { width: min(560px, calc(100vw - 32px)); }
 .sidebar-modal-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
 .sidebar-modal-body { font-size: 13px; color: var(--dim); line-height: 1.5; }
 .sidebar-modal-error {
@@ -1695,6 +1696,8 @@ button.sidebar-folder-row:hover,
 .resource-editor { display: flex; flex-direction: column; gap: 0; max-width: 720px; }
 .resource-editor-head { margin-bottom: 8px; }
 .resource-editor-title { margin: 0; font-size: 17px; font-weight: 700; }
+.mcp-json-input { min-height: 220px; padding: 10px 12px; resize: vertical; line-height: 1.45; }
+.mcp-paste-json-btn { align-self: flex-start; }
 .resource-editor-body { display: flex; flex-direction: column; gap: 18px; padding: 12px 0; }
 .resource-editor-actions { display: flex; align-items: center; gap: 8px; padding-top: 16px; border-top: 1px solid var(--border); }
 .resource-editor-actions-spacer { flex: 1; }

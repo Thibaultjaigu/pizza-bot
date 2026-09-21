@@ -1,0 +1,98 @@
+import type { McpServerEntryWire } from "@/api-client";
+
+export type ParsedMcpJson = {
+  name: string;
+  entry: McpServerEntryWire;
+};
+
+export type McpJsonResult =
+  | { ok: true; value: ParsedMcpJson }
+  | { ok: false; error: string };
+
+export function parseMcpJson(input: string): McpJsonResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input);
+  } catch {
+    return { ok: false, error: "Paste valid JSON to continue." };
+  }
+
+  if (!isRecord(parsed) || !isRecord(parsed.mcpServers)) {
+    return { ok: false, error: "JSON must contain an mcpServers object." };
+  }
+
+  const names = Object.keys(parsed.mcpServers);
+  const name = names[0];
+  const config = name ? parsed.mcpServers[name] : undefined;
+  if (!name || !isRecord(config)) {
+    return { ok: false, error: "mcpServers must contain a server configuration." };
+  }
+
+  const command = config.command;
+  const url = config.url;
+  if (typeof command === "string" && url !== undefined || command !== undefined && url !== undefined) {
+    return { ok: false, error: "A server cannot define both command and url." };
+  }
+  if (command === undefined && url === undefined) {
+    return { ok: false, error: "A server must define command or url." };
+  }
+
+  const type = config.type;
+  if (type !== undefined && type !== "stdio" && type !== "http" && type !== "streamable-http" && type !== "sse") {
+    return { ok: false, error: "Unknown MCP transport type." };
+  }
+  if (type === "stdio" && command === undefined || type !== "stdio" && type !== undefined && url === undefined) {
+    return { ok: false, error: "The transport type does not match the server fields." };
+  }
+
+  if (typeof command === "string") {
+    if (!command.trim()) {
+      return { ok: false, error: "command must not be empty." };
+    }
+    if (type !== undefined && type !== "stdio") {
+      return { ok: false, error: "The transport type does not match the server fields." };
+    }
+    if (!isOptionalStringArray(config.args) || !isStringRecord(config.env)) {
+      return { ok: false, error: "args must be strings and env values must be strings." };
+    }
+    return {
+      ok: true,
+      value: {
+        name,
+        entry: {
+          command,
+          ...(config.args ? { args: config.args } : {}),
+          ...(config.env ? { env: config.env } : {}),
+          ...(typeof config.cwd === "string" ? { cwd: config.cwd } : {}),
+        },
+      },
+    };
+  }
+
+  if (typeof url !== "string" || !isStringRecord(config.headers)) {
+    return { ok: false, error: "url must be a string and header values must be strings." };
+  }
+  return {
+    ok: true,
+    value: {
+      name,
+      entry: {
+        ...(type === "sse" ? { type: "sse" as const } : {}),
+        url,
+        ...(config.headers ? { headers: config.headers } : {}),
+      },
+    },
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> | undefined {
+  return value === undefined || (isRecord(value) && Object.values(value).every((item) => typeof item === "string"));
+}
+
+function isOptionalStringArray(value: unknown): value is string[] | undefined {
+  return value === undefined || (Array.isArray(value) && value.every((item) => typeof item === "string"));
+}

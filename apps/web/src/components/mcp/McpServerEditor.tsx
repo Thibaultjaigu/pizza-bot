@@ -1,9 +1,11 @@
 import { useState, type ReactNode } from "react";
 import type { McpServerDoc, McpServerEntryWire } from "@/api-client";
-import { ChevronLeft, Plus, Trash2 } from "lucide-react";
+import { Dialog as DialogPrimitive } from "radix-ui";
+import { ChevronLeft, FileJson, Plus, Trash2 } from "lucide-react";
 import { L } from "../../lexicon.js";
 import { slugify } from "../../lib/utils.js";
 import { useAppToast } from "../AppToast.js";
+import { parseMcpJson, type ParsedMcpJson } from "./mcp-json.js";
 
 export interface McpServerEditorProps {
   server: McpServerDoc | null;
@@ -65,6 +67,7 @@ export function McpServerEditor({
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pasteJsonOpen, setPasteJsonOpen] = useState(false);
 
   const canSave =
     name.trim() !== "" && (transport === "stdio" ? command.trim() !== "" : url.trim() !== "") && !saving;
@@ -116,6 +119,12 @@ export function McpServerEditor({
       <div className="resource-editor-body">
         {enablement}
         {reconnectControl}
+
+        {isNew && (
+          <button type="button" className="btn-secondary mcp-paste-json-btn" onClick={() => setPasteJsonOpen(true)}>
+            <FileJson size={14} /> Paste JSON
+          </button>
+        )}
 
         <label className="field">
           <span className="field-label">Name</span>
@@ -265,7 +274,82 @@ export function McpServerEditor({
           {saving ? "Saving…" : isNew ? "Create" : "Save"}
         </button>
       </footer>
+      {pasteJsonOpen && (
+        <PasteMcpJsonDialog
+          onCancel={() => setPasteJsonOpen(false)}
+          onApply={(pasted) => {
+            if (pasted.name) setName(pasted.name);
+            const description =
+              "command" in pasted.entry
+                ? `stdio · ${pasted.entry.command}`
+                : `url · ${pasted.entry.url}`;
+            if ("command" in pasted.entry) {
+              setTransport("stdio");
+              setCommand(pasted.entry.command);
+              setArgs(pasted.entry.args ?? []);
+              setEnv(toRows(pasted.entry.env));
+              setCwd(pasted.entry.cwd ?? "");
+            } else {
+              setTransport("url");
+              setUrlType(pasted.entry.type ?? "http");
+              setUrl(pasted.entry.url);
+              setHeaders(toRows(pasted.entry.headers));
+            }
+            setPasteJsonOpen(false);
+            notify({ title: "Fields populated from JSON", description, tone: "success" });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function PasteMcpJsonDialog({
+  onCancel,
+  onApply,
+}: {
+  onCancel: () => void;
+  onApply: (value: ParsedMcpJson) => void;
+}) {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const apply = () => {
+    const result = parseMcpJson(value);
+    if (result.ok) onApply(result.value);
+    else setError(result.error);
+  };
+
+  return (
+    <DialogPrimitive.Root open onOpenChange={(open) => !open && onCancel()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="sidebar-modal-backdrop" />
+        <DialogPrimitive.Content className="sidebar-modal sidebar-modal--wide">
+          <DialogPrimitive.Title className="sidebar-modal-title">Paste MCP JSON</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sidebar-modal-body">
+            Paste an MCP server configuration to populate the form.
+          </DialogPrimitive.Description>
+          <textarea
+            className="sidebar-modal-input mcp-json-input mcp-mono"
+            value={value}
+            autoFocus
+            onChange={(event) => {
+              setValue(event.target.value);
+              setError(null);
+            }}
+            placeholder={'{"mcpServers":{"my-server":{"command":"npx","args":["-y","..."]}}}'}
+            aria-label="MCP server JSON"
+          />
+          {error && <div className="sidebar-modal-error" role="alert">{error}</div>}
+          <div className="sidebar-modal-actions">
+            <button type="button" className="sidebar-modal-btn" onClick={onCancel}>Cancel</button>
+            <button type="button" className="sidebar-modal-btn primary" onClick={apply} disabled={!value.trim()}>
+              Apply
+            </button>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
