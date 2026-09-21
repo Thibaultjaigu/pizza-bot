@@ -8,9 +8,6 @@ import { useAppToast } from "../AppToast.js";
 export interface McpServerEditorProps {
   server: McpServerDoc | null;
   onSave: (id: string, entry: McpServerEntryWire) => Promise<void>;
-  onDelete?: () => Promise<void>;
-  /** When set, Delete stays visible but disabled and explains why. */
-  deleteBlockedReason?: string;
   enablement?: ReactNode;
   reconnectControl?: ReactNode;
   dependents?: ReactNode;
@@ -85,8 +82,6 @@ function buildEntry(draft: Draft): McpServerEntryWire {
 export function McpServerEditor({
   server,
   onSave,
-  onDelete,
-  deleteBlockedReason,
   enablement,
   reconnectControl,
   dependents,
@@ -291,18 +286,7 @@ export function McpServerEditor({
         {dependents}
       </div>
 
-      <footer className="resource-editor-actions sticky">
-        {!isNew && onDelete && (
-          <button
-            type="button"
-            className="btn-secondary resource-editor-delete"
-            onClick={() => void onDelete()}
-            disabled={saving || Boolean(deleteBlockedReason)}
-            title={deleteBlockedReason}
-          >
-            <Trash2 size={14} /> Delete
-          </button>
-        )}
+      <footer className="resource-editor-actions">
         <span className="resource-editor-actions-spacer" />
         <button type="button" className="btn-secondary" onClick={cancel} disabled={saving}>
           Cancel
