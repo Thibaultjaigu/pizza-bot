@@ -14,13 +14,15 @@ const stateSchema = z.object({
  * Graph state, not a synthesized protocol frame: LangGraph's own `values`
  * snapshot replaces the whole state object on the client, so a flag that is
  * not part of the state is erased by the next snapshot. State also lands in
- * the checkpoint, so the notice survives a reload. Written on every model
- * call — `false` included — so a later normal turn clears it.
+ * the checkpoint, so the notice survives a reload. Reset at run start so a
+ * run that never completes a model call (stopped, or the model-call ceiling
+ * already spent) cannot inherit the previous run's flag.
  */
 export function truncatedTurnMiddleware() {
   return createMiddleware({
     name: "truncatedTurn",
     stateSchema,
+    beforeAgent: () => ({ [TRUNCATED_TURN_KEY]: false }),
     afterModel: (state) => ({
       [TRUNCATED_TURN_KEY]: isTruncatedTurn(state.messages.at(-1)),
     }),

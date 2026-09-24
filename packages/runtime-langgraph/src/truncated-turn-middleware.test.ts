@@ -60,8 +60,13 @@ describe("isTruncatedTurn", () => {
 
 describe("truncatedTurnMiddleware", () => {
   const middleware = truncatedTurnMiddleware() as unknown as {
+    beforeAgent: () => Record<string, unknown>;
     afterModel: (state: { messages: unknown[] }) => Record<string, unknown>;
   };
+
+  it("clears the flag when a run starts", () => {
+    expect(middleware.beforeAgent()).toEqual({ [TRUNCATED_TURN_KEY]: false });
+  });
 
   it("writes the flag from the latest model reply on every call, false included", () => {
     expect(middleware.afterModel({ messages: [new HumanMessage("go"), reasoningOnly("length")] })).toEqual({
