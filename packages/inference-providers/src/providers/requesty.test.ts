@@ -1,6 +1,10 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HumanMessage } from "@langchain/core/messages";
 import { RequestyLangChainModelProvider } from "./requesty.js";
+
+beforeEach(() => {
+  vi.stubEnv("REQUESTY_BASE_URL", "");
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -54,7 +58,7 @@ describe("Requesty model discovery", () => {
       {
         id: "claude-sonnet-4-5",
         provider: "requesty",
-        displayName: "claude-sonnet-4-5 (Requesty)",
+        displayName: "claude-sonnet-4-5 (Requesty managed)",
         contextWindow: 200_000,
         maxOutputTokens: 64_000,
         supportsTools: true,
@@ -152,6 +156,60 @@ describe("Requesty model discovery", () => {
         supportsVision: true,
       }),
     ]);
+  });
+  it("replaces a cleared custom endpoint with the environment fallback", async () => {
+    vi.stubEnv("REQUESTY_BASE_URL", "https://router.eu.requesty.ai/v1");
+    const fetchFn = vi.fn(async () => Response.json({ data: [] }));
+    const provider = new RequestyLangChainModelProvider({
+      apiKey: "test-key",
+      baseUrl: "https://requesty-custom.example/v1",
+      fetch: fetchFn,
+    });
+
+    provider.configure({ method: "api-key", values: { apiKey: "test-key", baseUrl: "" } });
+    await provider.listModels();
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      "https://router.eu.requesty.ai/v1/models",
+      expect.any(Object),
+    );
+  });
+
+  it("uses the default endpoint when no override is configured", async () => {
+    const fetchFn = vi.fn(async () => Response.json({ data: [] }));
+    const provider = new RequestyLangChainModelProvider({ apiKey: "test-key", fetch: fetchFn });
+
+    provider.configure({ method: "api-key", values: { apiKey: "test-key" } });
+    await provider.listModels();
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      "https://router.requesty.ai/v1/models",
+      expect.any(Object),
+    );
+  });
+
+  it("drops cached descriptors when the configuration changes", async () => {
+    const fetchFn = catalogFetch({
+      "https://requesty.example/v1/models": {
+        data: [{ id: "openai/gpt-4o-mini", api: "chat", max_output_tokens: 4_096 }],
+      },
+      "https://router.eu.requesty.ai/v1/models": { data: [] },
+    });
+    const provider = new RequestyLangChainModelProvider({
+      apiKey: "test-key",
+      baseUrl: "https://requesty.example/v1",
+      fetch: fetchFn,
+      modelsDevFetch: vi.fn(async () => new Response("{}", { status: 200 })),
+    });
+    await provider.listModels();
+    expect((await provider.buildModel("openai/gpt-4o-mini"))).toMatchObject({ maxTokens: 4_096 });
+
+    provider.configure({
+      method: "api-key",
+      values: { apiKey: "test-key", baseUrl: "https://router.eu.requesty.ai/v1" },
+    });
+
+    expect((await provider.buildModel("openai/gpt-4o-mini"))).toMatchObject({ maxTokens: 8_192 });
   });
 });
 

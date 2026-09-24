@@ -116,19 +116,22 @@ export class RequestyLangChainModelProvider implements ModelProvider {
 
     try {
       const [managed, catalog] = await Promise.all([
+        // Managed policies only reorder the picker; the full catalog still serves every model.
         this.fetchModels("/models/managed", apiKey).catch(() => []),
         this.fetchModels("/models", apiKey),
       ]);
+      const managedIds = new Set(managed.flatMap((model) => (model.id ? [model.id] : [])));
       const seen = new Set<string>();
       const discovered = [...managed, ...catalog].flatMap((model) => {
         if (!model.id || seen.has(model.id) || (model.api && model.api !== "chat")) return [];
         seen.add(model.id);
         const contextWindow = positiveInteger(model.context_window);
         const maxOutputTokens = positiveInteger(model.max_output_tokens);
+        const label = managedIds.has(model.id) ? "Requesty managed" : "Requesty";
         return [{
           id: model.id,
           provider: "requesty",
-          displayName: `${model.id} (Requesty)`,
+          displayName: `${model.id} (${label})`,
           ...(contextWindow ? { contextWindow } : {}),
           ...(maxOutputTokens ? { maxOutputTokens } : {}),
           ...(model.supports_tool_calling !== undefined
