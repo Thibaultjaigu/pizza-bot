@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
 import { ChevronDown, Cloud, Search, X } from "lucide-react";
 import type { ModelsInfo } from "@/api-client";
 import { groupModelsByProvider, providerLabel } from "../model-options.js";
+import { useLayer } from "../hotkeys/index.js";
 
 type ModelOption = ModelsInfo["models"][number];
+type Row = { value: string; disabled?: boolean };
 
 export function ModelCombobox({
   models,
@@ -28,7 +30,9 @@ export function ModelCombobox({
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
   const normalized = query.trim().toLowerCase();
   const filteredModels = useMemo(
     () =>
@@ -40,7 +44,27 @@ export function ModelCombobox({
   );
   const groups = groupModelsByProvider(filteredModels);
   const selected = models.find((model) => model.id === value);
-  const triggerLabel = selected ? formatModelLabel(selected) : unavailableOption?.label ?? emptyOption?.label ?? value;
+  const triggerLabel = selected
+    ? formatModelLabel(selected)
+    : unavailableOption?.label ?? emptyOption?.label ?? (value || "Default model");
+  const emptyValue = emptyOption?.value ?? "";
+
+  // One cursor space spans the fixed rows and the filtered models, in render order.
+  const leadingRows: Row[] = [];
+  if (emptyOption) leadingRows.push({ value: emptyValue });
+  if (unavailableOption) leadingRows.push({ value: unavailableOption.value, disabled: true });
+  const modelOffset = leadingRows.length;
+  const rows: Row[] = [...leadingRows, ...filteredModels.map((model) => ({ value: model.id }))];
+  const firstEnabled = Math.max(rows.findIndex((row) => !row.disabled), 0);
+  const optionId = (index: number) => `${listId}-option-${index}`;
+
+  const close = (restoreFocus: boolean) => {
+    setOpen(false);
+    if (restoreFocus) triggerRef.current?.focus();
+  };
+
+  // Popover layers consume Escape before the chat-zone binding returns focus.
+  useLayer("model-combobox", { active: open, onEscape: () => close(true) });
 
   useEffect(() => {
     if (!open) return;
@@ -54,52 +78,81 @@ export function ModelCombobox({
   useEffect(() => {
     if (!open) return;
     setQuery("");
-    const index = models.findIndex((model) => model.id === value);
-    setCursor(index < 0 ? 0 : index);
+    const index = rows.findIndex((row) => row.value === value && !row.disabled);
+    setCursor(index < 0 ? firstEnabled : index);
     requestAnimationFrame(() => searchRef.current?.focus());
+    // Seed only on open or an external value change; typing re-seeds below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, value, models]);
 
   useEffect(() => {
-    setCursor((current) => Math.min(current, Math.max(filteredModels.length - 1, 0)));
-  }, [filteredModels.length]);
+    if (!normalized) return;
+    setCursor(filteredModels.length > 0 ? modelOffset : firstEnabled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalized]);
+
+  useEffect(() => {
+    setCursor((current) => Math.min(current, Math.max(rows.length - 1, 0)));
+  }, [rows.length]);
 
   const pick = (nextValue: string) => {
     onChange(nextValue);
-    setOpen(false);
+    close(true);
   };
 
-  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (!open) {
-      if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
-        event.preventDefault();
-        if (!disabled) setOpen(true);
-      }
-      return;
+  const step = (from: number, delta: number) => {
+    const count = rows.length;
+    let next = from;
+    for (let i = 0; i < count; i += 1) {
+      next = (next + delta + count) % count;
+      if (!rows[next]?.disabled) return next;
     }
-    if (event.key === "Escape") {
+    return from;
+  };
+
+  const onTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (open) return;
+    if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
       event.preventDefault();
-      setOpen(false);
-    } else if (event.key === "ArrowDown" && filteredModels.length > 0) {
-      event.preventDefault();
-      setCursor((current) => (current + 1) % filteredModels.length);
-    } else if (event.key === "ArrowUp" && filteredModels.length > 0) {
-      event.preventDefault();
-      setCursor((current) => (current - 1 + filteredModels.length) % filteredModels.length);
-    } else if (event.key === "Enter" && filteredModels[cursor]) {
-      event.preventDefault();
-      pick(filteredModels[cursor].id);
+      if (!disabled) setOpen(true);
     }
   };
+
+  // Navigation lives on the search input so Enter on the clear button keeps its native click.
+  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" && rows.length > 0) {
+      event.preventDefault();
+      setCursor((current) => step(current, 1));
+    } else if (event.key === "ArrowUp" && rows.length > 0) {
+      event.preventDefault();
+      setCursor((current) => step(current, -1));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const row = rows[cursor];
+      if (row && !row.disabled) pick(row.value);
+    }
+  };
+
+  // A null relatedTarget is a click on inert menu chrome; the mousedown listener owns outside clicks.
+  const onBlur = (event: FocusEvent<HTMLDivElement>) => {
+    const next = event.relatedTarget as Node | null;
+    if (open && next && !wrapRef.current?.contains(next)) setOpen(false);
+  };
+
+  const optionClass = (index: number, active: boolean, extra = "") =>
+    `model-picker-item${extra}${active ? " active" : ""}${index === cursor ? " cursor" : ""}`;
 
   return (
-    <div className={`model-picker ${className}`} ref={wrapRef} onKeyDown={onKeyDown}>
+    <div className={`model-picker ${className}`} ref={wrapRef} onBlur={onBlur}>
       <button
+        ref={triggerRef}
         type="button"
         className="model-picker-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
         disabled={disabled || (models.length === 0 && !emptyOption && !unavailableOption)}
         onClick={() => setOpen((current) => !current)}
+        onKeyDown={onTriggerKeyDown}
       >
         <Cloud size={15} aria-hidden="true" />
         <span className="model-picker-label"><span className="model-picker-model">{triggerLabel}</span></span>
@@ -114,10 +167,10 @@ export function ModelCombobox({
               value={query}
               placeholder="Search models..."
               aria-label="Search models"
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setCursor(0);
-              }}
+              aria-controls={listId}
+              aria-activedescendant={rows[cursor] ? optionId(cursor) : undefined}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={onSearchKeyDown}
             />
             {query && (
               <button type="button" aria-label="Clear model search" onClick={() => setQuery("")}>
@@ -125,15 +178,17 @@ export function ModelCombobox({
               </button>
             )}
           </div>
-          <ul className="model-picker-results" role="listbox" aria-label="Models">
+          <ul className="model-picker-results" id={listId} role="listbox" aria-label="Models">
             {emptyOption && (
               <li>
                 <button
                   type="button"
                   role="option"
-                  aria-selected={value === (emptyOption.value ?? "")}
-                  className={`model-picker-item${value === (emptyOption.value ?? "") ? " active" : ""}`}
-                  onClick={() => pick(emptyOption.value ?? "")}
+                  id={optionId(0)}
+                  tabIndex={-1}
+                  aria-selected={value === emptyValue}
+                  className={optionClass(0, value === emptyValue)}
+                  onClick={() => pick(emptyValue)}
                 >
                   {emptyOption.label}
                 </button>
@@ -141,7 +196,15 @@ export function ModelCombobox({
             )}
             {unavailableOption && (
               <li>
-                <button type="button" role="option" className="model-picker-item unavailable" disabled>
+                <button
+                  type="button"
+                  role="option"
+                  id={optionId(modelOffset - 1)}
+                  tabIndex={-1}
+                  aria-selected={value === unavailableOption.value}
+                  className={optionClass(modelOffset - 1, false, " unavailable")}
+                  disabled
+                >
                   {unavailableOption.label}
                 </button>
               </li>
@@ -155,8 +218,10 @@ export function ModelCombobox({
                       <button
                         type="button"
                         role="option"
+                        id={optionId(modelOffset + index)}
+                        tabIndex={-1}
                         aria-selected={model.id === value}
-                        className={`model-picker-item${model.id === value ? " active" : ""}${index === cursor ? " cursor" : ""}`}
+                        className={optionClass(modelOffset + index, model.id === value)}
                         onClick={() => pick(model.id)}
                       >
                         <Cloud size={14} aria-hidden="true" />
