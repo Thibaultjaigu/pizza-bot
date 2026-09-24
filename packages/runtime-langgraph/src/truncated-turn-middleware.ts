@@ -2,12 +2,11 @@
 import { AIMessage, type BaseMessage } from "@langchain/core/messages";
 import { createMiddleware } from "langchain";
 import { z } from "zod";
+import { TRUNCATED_TURN_CHANNEL } from "@pizza-bot/core";
 import { reachedOutputLimit } from "./output-truncation-middleware.js";
 
-export const TRUNCATED_TURN_KEY = "truncated";
-
 const stateSchema = z.object({
-  [TRUNCATED_TURN_KEY]: z.boolean().optional(),
+  [TRUNCATED_TURN_CHANNEL]: z.boolean().optional(),
 });
 
 /**
@@ -22,9 +21,9 @@ export function truncatedTurnMiddleware() {
   return createMiddleware({
     name: "truncatedTurn",
     stateSchema,
-    beforeAgent: () => ({ [TRUNCATED_TURN_KEY]: false }),
+    beforeAgent: () => ({ [TRUNCATED_TURN_CHANNEL]: false }),
     afterModel: (state) => ({
-      [TRUNCATED_TURN_KEY]: isTruncatedTurn(state.messages.at(-1)),
+      [TRUNCATED_TURN_CHANNEL]: isTruncatedTurn(state.messages.at(-1)),
     }),
   });
 }

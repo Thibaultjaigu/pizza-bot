@@ -52,7 +52,7 @@ export function ChatPane({
   searchTarget,
   onSearchTargetHandled,
 }: ChatPaneProps) {
-  const { messages, status, errorText, errorCode, truncatedNotice, queued, send, steerNow, cancelQueued, stop, decide } =
+  const { messages, status, errorText, errorCode, truncated, queued, send, steerNow, cancelQueued, stop, decide } =
     useThreadSlice(threadId, hydrateOnMount);
   const [prefill, setPrefill] = useState<string | undefined>();
   const [prefillToken, setPrefillToken] = useState(0);
@@ -104,9 +104,7 @@ export function ChatPane({
       {status === "error" && errorText && (
         <RunErrorBanner text={errorText} code={errorCode} />
       )}
-      {status === "idle" && truncatedNotice && (
-        <TruncatedNoticeBanner text={truncatedNotice} />
-      )}
+      {status === "idle" && truncated && <TruncatedNoticeBanner />}
       <Composer
         threadId={threadId}
         streaming={status === "streaming"}

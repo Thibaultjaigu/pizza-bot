@@ -4,12 +4,6 @@ import type { UsageInfo } from "./messages.js";
 
 export type StreamStatus = "idle" | "streaming" | "error" | "interrupted";
 
-/**
- * The run completes with `success`, not `error` — this is informational, not
- * a failure — so it rides its own field rather than `errorText`.
- */
-export const TRUNCATED_NOTICE = "Response was cut off (hit the token limit) — send a follow-up to continue.";
-
 export interface DelegationInfo {
   delegationId: string;
   subagent: string;
@@ -58,9 +52,8 @@ export interface ThreadSlice {
    */
   usage?: UsageInfo | undefined;
   /**
-   * Set to {@link TRUNCATED_NOTICE} when the orchestrator's own turn ended at
-   * the token limit with no visible text. Explicit undefined permits clearing
-   * under exactOptionalPropertyTypes.
+   * The orchestrator's own turn ended at the token limit with no visible text.
+   * The run still completes with `success`, so this is not an `errorText`.
    */
-  truncatedNotice?: string | undefined;
+  truncated: boolean;
 }

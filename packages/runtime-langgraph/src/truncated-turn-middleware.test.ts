@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AIMessage, HumanMessage, type AIMessageFields } from "@langchain/core/messages";
-import { TRUNCATED_TURN_KEY, isTruncatedTurn, truncatedTurnMiddleware } from "./truncated-turn-middleware.js";
+import { TRUNCATED_TURN_CHANNEL } from "@pizza-bot/core";
+import { isTruncatedTurn, truncatedTurnMiddleware } from "./truncated-turn-middleware.js";
 
 function reasoningOnly(finishReason: string): AIMessage {
   return new AIMessage({
@@ -65,15 +66,15 @@ describe("truncatedTurnMiddleware", () => {
   };
 
   it("clears the flag when a run starts", () => {
-    expect(middleware.beforeAgent()).toEqual({ [TRUNCATED_TURN_KEY]: false });
+    expect(middleware.beforeAgent()).toEqual({ [TRUNCATED_TURN_CHANNEL]: false });
   });
 
   it("writes the flag from the latest model reply on every call, false included", () => {
     expect(middleware.afterModel({ messages: [new HumanMessage("go"), reasoningOnly("length")] })).toEqual({
-      [TRUNCATED_TURN_KEY]: true,
+      [TRUNCATED_TURN_CHANNEL]: true,
     });
     expect(middleware.afterModel({ messages: [new HumanMessage("go"), new AIMessage("done")] })).toEqual({
-      [TRUNCATED_TURN_KEY]: false,
+      [TRUNCATED_TURN_CHANNEL]: false,
     });
   });
 });

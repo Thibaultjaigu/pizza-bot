@@ -62,13 +62,13 @@ export interface SerializedMessage {
   [k: string]: unknown;
 }
 
+/** State channel the orchestrator's truncatedTurnMiddleware writes; the web store reads it by this key. */
+export const TRUNCATED_TURN_CHANNEL = "truncatedTurn";
+
 export interface ThreadStateValues {
   messages?: SerializedMessage[];
-  /**
-   * Graph state written by the orchestrator's `truncatedTurnMiddleware`:
-   * the last turn ended at `finish_reason: "length"` with no visible text.
-   */
-  truncated?: boolean;
+  /** The run ended at `finish_reason: "length"` with no visible text. */
+  [TRUNCATED_TURN_CHANNEL]?: boolean;
   [channel: string]: unknown;
 }
 

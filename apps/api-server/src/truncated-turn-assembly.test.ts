@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ASSISTANT_ID, PIZZA_BOT_AGENT, type RunInput, type RunOptions, type ThreadState } from "@pizza-bot/core";
+import { ASSISTANT_ID, PIZZA_BOT_AGENT, TRUNCATED_TURN_CHANNEL, type RunInput, type RunOptions, type ThreadState, type ThreadStateValues } from "@pizza-bot/core";
 import { createPizzaBotAgent } from "@pizza-bot/runtime-langgraph";
 import { AIMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
@@ -113,18 +113,18 @@ async function runThroughRealSdk(model: NativeStreamModel, threadId: string) {
 }
 
 describe("a truncated orchestrator turn reaches the real SDK rootStore", () => {
-  it("commits values.truncated = true when the turn ends at the token limit with no text", async () => {
+  it("commits the truncated-turn flag as true when the turn ends at the token limit with no text", async () => {
     const snapshot = await runThroughRealSdk(
       new NativeStreamModel([reasoningOnlyTruncatedTurn()]),
       "t-truncated",
     );
-    expect((snapshot.values as { truncated?: unknown }).truncated).toBe(true);
+    expect((snapshot.values as ThreadStateValues)[TRUNCATED_TURN_CHANNEL]).toBe(true);
     expect(snapshot.isLoading).toBe(false);
     expect(snapshot.error).toBeUndefined();
   });
 
-  it("commits values.truncated = false for a normal text turn", async () => {
+  it("commits the truncated-turn flag as false for a normal text turn", async () => {
     const snapshot = await runThroughRealSdk(new NativeStreamModel([plainTextTurn("All done.")]), "t-normal");
-    expect((snapshot.values as { truncated?: unknown }).truncated).toBe(false);
+    expect((snapshot.values as ThreadStateValues)[TRUNCATED_TURN_CHANNEL]).toBe(false);
   });
 });

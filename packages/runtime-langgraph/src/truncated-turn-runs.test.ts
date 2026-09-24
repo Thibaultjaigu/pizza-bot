@@ -1,9 +1,9 @@
-/** Drives the real graph to pin that `truncated` describes the run that just finished, not the last model call ever. */
+/** Drives the real graph to pin that the truncated-turn flag describes the run that just finished, not the last model call ever. */
 import { describe, expect, it } from "vitest";
 import { AIMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { MemorySaver } from "@langchain/langgraph";
-import type { RunInput, RunOptions } from "@pizza-bot/core";
+import { TRUNCATED_TURN_CHANNEL, type RunInput, type RunOptions } from "@pizza-bot/core";
 import { createPizzaBotAgent, type LangGraphAgent } from "./index.js";
 
 type ScriptedTurn = { message: AIMessage } | { hangUntilAbort: true };
@@ -58,10 +58,10 @@ async function runTurn(agent: LangGraphAgent, threadId: string, signal?: AbortSi
 }
 
 async function truncatedFlag(agent: LangGraphAgent, threadId: string): Promise<unknown> {
-  return (await agent.getState(threadId)).values.truncated;
+  return (await agent.getState(threadId)).values[TRUNCATED_TURN_CHANNEL];
 }
 
-describe("truncated flag across runs", () => {
+describe("truncated-turn flag across runs", () => {
   it("does not survive into a run that is stopped before the model replies", async () => {
     const agent = await createPizzaBotAgent("Help the user.", {
       model: new ScriptedModel([{ message: reasoningOnlyTruncated() }, { hangUntilAbort: true }]),

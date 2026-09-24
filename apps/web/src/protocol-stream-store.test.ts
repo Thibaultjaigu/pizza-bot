@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { TRUNCATED_NOTICE } from "@/projection";
+import { TRUNCATED_TURN_CHANNEL } from "@pizza-bot/core";
 interface FakeController {
   initialThreadId?: string;
   isLoading: boolean;
@@ -529,35 +529,35 @@ describe("ProtocolStreamStore steering-enqueue", () => {
     });
   });
 
-  it("surfaces the truncated-turn notice from values, without marking the run an error", async () => {
+  it("surfaces the truncated-turn flag from values, without marking the run an error", async () => {
     await store.attach(TID, false);
     await store.send(TID, "summarize the thread");
     await flush();
 
-    last.rootValues = { truncated: true };
+    last.rootValues = { [TRUNCATED_TURN_CHANNEL]: true };
     last.isLoading = false;
     last.notify();
 
     expect(store.getSlice(TID)).toMatchObject({
       status: "idle",
       errorText: undefined,
-      truncatedNotice: TRUNCATED_NOTICE,
+      truncated: true,
     });
   });
 
-  it("clears the truncated-turn notice once a later turn publishes truncated: false", async () => {
+  it("clears the truncated-turn flag once a later turn publishes false", async () => {
     await store.attach(TID, false);
     await store.send(TID, "summarize the thread");
     await flush();
-    last.rootValues = { truncated: true };
+    last.rootValues = { [TRUNCATED_TURN_CHANNEL]: true };
     last.isLoading = false;
     last.notify();
-    expect(store.getSlice(TID).truncatedNotice).toBe(TRUNCATED_NOTICE);
+    expect(store.getSlice(TID).truncated).toBe(true);
 
-    last.rootValues = { truncated: false };
+    last.rootValues = { [TRUNCATED_TURN_CHANNEL]: false };
     last.notify();
 
-    expect(store.getSlice(TID).truncatedNotice).toBeUndefined();
+    expect(store.getSlice(TID).truncated).toBe(false);
   });
 
   it("clears a prior run error once the next run resolves", async () => {
