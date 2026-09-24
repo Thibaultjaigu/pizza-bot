@@ -6,7 +6,7 @@ import { MemorySaver } from "@langchain/langgraph";
 import { TRUNCATED_TURN_CHANNEL, type RunInput, type RunOptions } from "@pizza-bot/core";
 import { createPizzaBotAgent, type LangGraphAgent } from "./index.js";
 
-type ScriptedTurn = { message: AIMessage } | { hangUntilAbort: true };
+type ScriptedTurn = { message: AIMessage } | { hangUntilAbort: { onEntered: () => void } };
 
 class ScriptedModel extends BaseChatModel<Record<string, never>> {
   private i = 0;
@@ -32,6 +32,7 @@ class ScriptedModel extends BaseChatModel<Record<string, never>> {
     if ("hangUntilAbort" in turn) {
       await new Promise<never>((_, reject) => {
         options.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+        turn.hangUntilAbort.onEntered();
       });
     }
     return { generations: [{ message: (turn as { message: AIMessage }).message, text: "" }] };
@@ -63,8 +64,10 @@ async function truncatedFlag(agent: LangGraphAgent, threadId: string): Promise<u
 
 describe("truncated-turn flag across runs", () => {
   it("does not survive into a run that is stopped before the model replies", async () => {
+    let onEntered!: () => void;
+    const modelEntered = new Promise<void>((resolve) => (onEntered = resolve));
     const agent = await createPizzaBotAgent("Help the user.", {
-      model: new ScriptedModel([{ message: reasoningOnlyTruncated() }, { hangUntilAbort: true }]),
+      model: new ScriptedModel([{ message: reasoningOnlyTruncated() }, { hangUntilAbort: { onEntered } }]),
       checkpointer: new MemorySaver(),
     });
     const threadId = `truncated_${Math.random().toString(36).slice(2)}`;
@@ -73,8 +76,11 @@ describe("truncated-turn flag across runs", () => {
     expect(await truncatedFlag(agent, threadId)).toBe(true);
 
     const controller = new AbortController();
-    setTimeout(() => controller.abort(), 100);
-    await runTurn(agent, threadId, controller.signal);
+    const stoppedRun = runTurn(agent, threadId, controller.signal);
+    // Inside the model call means beforeAgent has already checkpointed the reset.
+    await modelEntered;
+    controller.abort();
+    await stoppedRun;
     expect(await truncatedFlag(agent, threadId)).toBe(false);
   }, 30_000);
 
