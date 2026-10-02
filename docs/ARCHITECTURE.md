@@ -254,7 +254,11 @@ in `core/src/protocol-types.ts`:
   conversation. Upstream special-cases `read_file` by name, stripping the `cat -n`
   line numbers and `@@ … @@` status header the tool shows in a transcript, so a
   page arrives in the guest as raw content; no other bridged tool gets that
-  treatment. MCP tools are deliberately withheld: reaching one from generated code
+  treatment. That header is also the only mark of a page DeepAgents cut at its
+  size cap, so the bridge makes such a read throw instead, naming the offset to
+  resume from (and, for a cut page, the limit that fits); an uncut page is
+  unchanged.
+  MCP tools are deliberately withheld: reaching one from generated code
   would bypass the approval a skill declares through `interruptOn`. Writes are not
   narrowed at the bridge — the composite backend re-reads each grant's `readOnly`
   flag on every call, so it refuses the write and names why, whereas the bridged
@@ -287,7 +291,8 @@ in `core/src/protocol-types.ts`:
   the same filesystem tools and `eval` directly, so the only loss is an isolated
   context to do noisy filesystem work in. With no ready skills there is nothing
   to route to, so the `task` tool
-  and the QuickJS `task()` bridge are both absent; readiness is dynamic, so an
+  and the QuickJS `task()` bridge are both absent, and the orchestrator prompt
+  omits its delegation guidance; readiness is dynamic, so an
   installed-but-unavailable skill also withholds them. With skills, the root
   QuickJS interpreter exposes `task()` for programmatic fan-out.
   Each skill catalog entry compiles directly into one subagent invoked through the
